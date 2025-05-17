@@ -18,6 +18,12 @@ dependencies = [
   # Optional for on-device preprocessing/transforms:
   "torchaudio>=2.0.0",
   "onnxruntime>=1.22.0",
+  "transformers>=4.30.0",
+  "sentencepiece>=0.1.98",
+  "accelerate>=0.20.0",
+  "webrtcvad>=2.0.10",
+  "faster-whisper>=1.1.1",
+  "speechbrain>=1.0.3",
 ]
 
 [build-system]

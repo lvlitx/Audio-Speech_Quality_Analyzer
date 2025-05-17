@@ -1,99 +1,99 @@
-#audio quality only 
+# #audio quality only 
 
 
-import sys
-import time
-import numpy as np
-import sounddevice as sd
-import librosa
-from pesq import pesq
-import soundfile as sf
+# import sys
+# import time
+# import numpy as np
+# import sounddevice as sd
+# import librosa
+# from pesq import pesq
+# import soundfile as sf
 
-# 1. Select audio device (same as before)
-if sys.platform == 'win32':
-    devices = sd.query_devices()
-    device_idx = next(
-        i for i, dev in enumerate(devices)
-        if dev['max_input_channels'] > 0 and 'loopback' in dev['name'].lower()
-    )
-else:
-    device_idx = sd.default.device[0]
+# # 1. Select audio device (same as before)
+# if sys.platform == 'win32':
+#     devices = sd.query_devices()
+#     device_idx = next(
+#         i for i, dev in enumerate(devices)
+#         if dev['max_input_channels'] > 0 and 'loopback' in dev['name'].lower()
+#     )
+# else:
+#     device_idx = sd.default.device[0]
 
-# 2. Stream parameters
-SAMPLERATE = 48000
-BLOCKSIZE = 2048
+# # 2. Stream parameters
+# SAMPLERATE = 48000
+# BLOCKSIZE = 2048
 
-# 3. Throttle settings
-PRINT_INTERVAL = 1.0  # seconds between prints
-last_print_time = 0
+# # 3. Throttle settings
+# PRINT_INTERVAL = 1.0  # seconds between prints
+# last_print_time = 0
 
-def categorize(value, good_threshold, moderate_threshold, invert=False):
-    if invert:
-        if value <= good_threshold:      return "Good"
-        if value <= moderate_threshold:  return "Moderate"
-    else:
-        if value >= good_threshold:      return "Good"
-        if value >= moderate_threshold:  return "Moderate"
-    return "Bad"
+# def categorize(value, good_threshold, moderate_threshold, invert=False):
+#     if invert:
+#         if value <= good_threshold:      return "Good"
+#         if value <= moderate_threshold:  return "Moderate"
+#     else:
+#         if value >= good_threshold:      return "Good"
+#         if value >= moderate_threshold:  return "Moderate"
+#     return "Bad"
 
-def audio_callback(indata, frames, time_info, status):
-    global last_print_time
+# def audio_callback(indata, frames, time_info, status):
+#     global last_print_time
 
-    # compute metrics
-    data = indata[:, 0]
-    rms      = np.sqrt(np.mean(data**2))
-    peak     = np.max(np.abs(data))
-    clipping = int(np.sum(np.abs(data) >= 0.99))
-    S        = np.abs(librosa.stft(data, n_fft=2048))
-    flatness = float(librosa.feature.spectral_flatness(S=S).mean())
-    zcr      = float(librosa.feature.zero_crossing_rate(data).mean())
+#     # compute metrics
+#     data = indata[:, 0]
+#     rms      = np.sqrt(np.mean(data**2))
+#     peak     = np.max(np.abs(data))
+#     clipping = int(np.sum(np.abs(data) >= 0.99))
+#     S        = np.abs(librosa.stft(data, n_fft=2048))
+#     flatness = float(librosa.feature.spectral_flatness(S=S).mean())
+#     zcr      = float(librosa.feature.zero_crossing_rate(data).mean())
 
-    # categorize
-    rms_cat   = categorize(rms,      0.05, 0.02)
-    peak_cat  = categorize(peak,     0.5,  0.2)
-    clip_cat  = categorize(clipping, 0,    5,    invert=True)
-    flat_cat  = categorize(flatness, 0.2,  0.4,  invert=True)
-    zcr_cat   = categorize(zcr,      0.02, 0.05, invert=True)
+#     # categorize
+#     rms_cat   = categorize(rms,      0.05, 0.02)
+#     peak_cat  = categorize(peak,     0.5,  0.2)
+#     clip_cat  = categorize(clipping, 0,    5,    invert=True)
+#     flat_cat  = categorize(flatness, 0.2,  0.4,  invert=True)
+#     zcr_cat   = categorize(zcr,      0.02, 0.05, invert=True)
 
-    # overall
-    cats = [rms_cat, peak_cat, clip_cat, flat_cat, zcr_cat]
-    overall = "Bad" if "Bad" in cats else ("Moderate" if "Moderate" in cats else "Good")
+#     # overall
+#     cats = [rms_cat, peak_cat, clip_cat, flat_cat, zcr_cat]
+#     overall = "Bad" if "Bad" in cats else ("Moderate" if "Moderate" in cats else "Good")
 
-    # only print if enough time has passed
-    now = time.time()
-    if now - last_print_time >= PRINT_INTERVAL:
-        last_print_time = now
-        print("\n🔊 Audio Quality:", overall)
-        print(f"  • RMS Level:         {rms:.4f} ({rms_cat})")
-        print(f"  • Peak Level:        {peak:.4f} ({peak_cat})")
-        print(f"  • Clipping Count:    {clipping} ({clip_cat})")
-        print(f"  • Spectral Flatness: {flatness:.4f} ({flat_cat})")
-        print(f"  • Zero-Cross Rate:   {zcr:.4f} ({zcr_cat})")
+#     # only print if enough time has passed
+#     now = time.time()
+#     if now - last_print_time >= PRINT_INTERVAL:
+#         last_print_time = now
+#         print("\n🔊 Audio Quality:", overall)
+#         print(f"  • RMS Level:         {rms:.4f} ({rms_cat})")
+#         print(f"  • Peak Level:        {peak:.4f} ({peak_cat})")
+#         print(f"  • Clipping Count:    {clipping} ({clip_cat})")
+#         print(f"  • Spectral Flatness: {flatness:.4f} ({flat_cat})")
+#         print(f"  • Zero-Cross Rate:   {zcr:.4f} ({zcr_cat})")
 
-def compute_pesq(reference_path, captured_path):
-    ref, sr = sf.read(reference_path)
-    deg, _  = sf.read(captured_path)
-    return pesq(ref, deg, sr)
+# def compute_pesq(reference_path, captured_path):
+#     ref, sr = sf.read(reference_path)
+#     deg, _  = sf.read(captured_path)
+#     return pesq(ref, deg, sr)
 
-if __name__ == "__main__":
-    print(f"Using device index: {device_idx} ({sd.query_devices(device_idx)['name']})")
-    stream = sd.InputStream(
-        device=device_idx,
-        channels=1,
-        samplerate=SAMPLERATE,
-        blocksize=BLOCKSIZE,
-        callback=audio_callback
-    )
-    stream.start()
-    print(f"Monitoring audio quality... output every {PRINT_INTERVAL} second(s). Press Ctrl+C to stop.")
-    try:
-        while True:
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        print("\nStopped by user.")
-    finally:
-        stream.stop()
-        stream.close()
+# if __name__ == "__main__":
+#     print(f"Using device index: {device_idx} ({sd.query_devices(device_idx)['name']})")
+#     stream = sd.InputStream(
+#         device=device_idx,
+#         channels=1,
+#         samplerate=SAMPLERATE,
+#         blocksize=BLOCKSIZE,
+#         callback=audio_callback
+#     )
+#     stream.start()
+#     print(f"Monitoring audio quality... output every {PRINT_INTERVAL} second(s). Press Ctrl+C to stop.")
+#     try:
+#         while True:
+#             time.sleep(0.1)
+#     except KeyboardInterrupt:
+#         print("\nStopped by user.")
+#     finally:
+#         stream.stop()
+#         stream.close()
 
 
 
