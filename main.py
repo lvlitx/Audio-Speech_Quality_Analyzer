@@ -1,6 +1,6 @@
 # #audio quality only 
 
-
+#
 # import sys
 # import time
 # import numpy as np
@@ -272,125 +272,125 @@
 
 
 
-import sys, time, threading, queue
-import numpy as np
-import sounddevice as sd
-import librosa
-import webrtcvad
-from pesq import pesq      # optional
-import soundfile as sf
+# import sys, time, threading, queue
+# import numpy as np
+# import sounddevice as sd
+# import librosa
+# import webrtcvad
+# from pesq import pesq      # optional
+# import soundfile as sf
 
-# --- Configuration ---
-CAPTURE_RATE = 16000        # capture directly at VAD rate
-BLOCKSIZE    = 480          # ~30 ms blocks at 16 kHz
-PRINT_INT    = 1.0          # print once per second
-VAD_AGG      = 2            # aggressiveness level (0–3)
-N_FFT        = 256          # <= BLOCKSIZE to avoid warnings
+# # --- Configuration ---
+# CAPTURE_RATE = 16000        # capture directly at VAD rate
+# BLOCKSIZE    = 480          # ~30 ms blocks at 16 kHz
+# PRINT_INT    = 1.0          # print once per second
+# VAD_AGG      = 2            # aggressiveness level (0–3)
+# N_FFT        = 256          # <= BLOCKSIZE to avoid warnings
 
-# --- Setup VAD and queue ---
-vad = webrtcvad.Vad(VAD_AGG)
-audio_queue = queue.Queue()
-last_print = 0.0
+# # --- Setup VAD and queue ---
+# vad = webrtcvad.Vad(VAD_AGG)
+# audio_queue = queue.Queue()
+# last_print = 0.0
 
-# --- Callback: only enqueue data ---
-def callback(indata, frames, time_info, status):
-    try:
-        mono = indata.mean(axis=1)
-        audio_queue.put_nowait(mono.copy())
-    except queue.Full:
-        pass
-    except Exception:
-        raise sd.CallbackStop
+# # --- Callback: only enqueue data ---
+# def callback(indata, frames, time_info, status):
+#     try:
+#         mono = indata.mean(axis=1)
+#         audio_queue.put_nowait(mono.copy())
+#     except queue.Full:
+#         pass
+#     except Exception:
+#         raise sd.CallbackStop
 
-# --- Worker thread: process blocks ---
-def worker():
-    global last_print
-    while True:
-        data = audio_queue.get()
-        if data is None:
-            break
+# # --- Worker thread: process blocks ---
+# def worker():
+#     global last_print
+#     while True:
+#         data = audio_queue.get()
+#         if data is None:
+#             break
 
-        # VAD decision on this frame
-        pcm = (data * 32767).astype(np.int16).tobytes()
-        is_speech = vad.is_speech(pcm, CAPTURE_RATE)
-        if not is_speech:
-            continue
+#         # VAD decision on this frame
+#         pcm = (data * 32767).astype(np.int16).tobytes()
+#         is_speech = vad.is_speech(pcm, CAPTURE_RATE)
+#         if not is_speech:
+#             continue
 
-        # Compute metrics
-        rms       = np.sqrt(np.mean(data**2))
-        peak      = np.max(np.abs(data))
-        clips     = int(np.sum(np.abs(data) >= 0.99))
-        S         = np.abs(librosa.stft(data, n_fft=N_FFT))
-        flatness  = float(librosa.feature.spectral_flatness(S=S).mean())
-        zcr       = float(librosa.feature.zero_crossing_rate(data).mean())
+#         # Compute metrics
+#         rms       = np.sqrt(np.mean(data**2))
+#         peak      = np.max(np.abs(data))
+#         clips     = int(np.sum(np.abs(data) >= 0.99))
+#         S         = np.abs(librosa.stft(data, n_fft=N_FFT))
+#         flatness  = float(librosa.feature.spectral_flatness(S=S).mean())
+#         zcr       = float(librosa.feature.zero_crossing_rate(data).mean())
 
-        # Categorize
-        def cat(v, g, m, inv=False):
-            if inv:
-                return "Good" if v <= g else ("Moderate" if v <= m else "Bad")
-            return "Good" if v >= g else ("Moderate" if v >= m else "Bad")
+#         # Categorize
+#         def cat(v, g, m, inv=False):
+#             if inv:
+#                 return "Good" if v <= g else ("Moderate" if v <= m else "Bad")
+#             return "Good" if v >= g else ("Moderate" if v >= m else "Bad")
 
-        cats = {
-            "RMS":      cat(rms,      0.05, 0.02),
-            "Peak":     cat(peak,     0.5,  0.2),
-            "Clips":    cat(clips,    0,    5, True),
-            "Flatness": cat(flatness, 0.2,  0.4, True),
-            "ZCR":      cat(zcr,      0.02, 0.05, True)
-        }
-        overall = ("Bad" if "Bad" in cats.values()
-                   else "Moderate" if "Moderate" in cats.values()
-                   else "Good")
+#         cats = {
+#             "RMS":      cat(rms,      0.05, 0.02),
+#             "Peak":     cat(peak,     0.5,  0.2),
+#             "Clips":    cat(clips,    0,    5, True),
+#             "Flatness": cat(flatness, 0.2,  0.4, True),
+#             "ZCR":      cat(zcr,      0.02, 0.05, True)
+#         }
+#         overall = ("Bad" if "Bad" in cats.values()
+#                    else "Moderate" if "Moderate" in cats.values()
+#                    else "Good")
 
-        # Throttle printing
-        now = time.time()
-        if now - last_print < PRINT_INT:
-            continue
-        last_print = now
+#         # Throttle printing
+#         now = time.time()
+#         if now - last_print < PRINT_INT:
+#             continue
+#         last_print = now
 
-        print(f"\n🔊 Speech Quality: {overall}")
-        for name, rating in cats.items():
-            val = locals()[name.lower()] if name != "Clips" else clips
-            print(f"  • {name}: {val:.4f} ({rating})")
+#         print(f"\n🔊 Speech Quality: {overall}")
+#         for name, rating in cats.items():
+#             val = locals()[name.lower()] if name != "Clips" else clips
+#             print(f"  • {name}: {val:.4f} ({rating})")
 
-# --- Main: start stream and worker ---
-if __name__ == "__main__":
-    # Select loopback device on Windows, default elsewhere
-    if sys.platform == 'win32':
-        devs = sd.query_devices()
-        idx  = next(i for i,d in enumerate(devs)
-                    if d['max_input_channels']>0 and 'loopback' in d['name'].lower())
-    else:
-        idx = sd.default.device[0]
+# # --- Main: start stream and worker ---
+# if __name__ == "__main__":
+#     # Select loopback device on Windows, default elsewhere
+#     if sys.platform == 'win32':
+#         devs = sd.query_devices()
+#         idx  = next(i for i,d in enumerate(devs)
+#                     if d['max_input_channels']>0 and 'loopback' in d['name'].lower())
+#     else:
+#         idx = sd.default.device[0]
 
-    name = sd.query_devices(idx)['name']
-    print(f"Using device #{idx}: {name}")
-    print("Capturing system audio at 16 kHz; press Ctrl+C to stop.")
+#     name = sd.query_devices(idx)['name']
+#     print(f"Using device #{idx}: {name}")
+#     print("Capturing system audio at 16 kHz; press Ctrl+C to stop.")
 
-    # Start worker
-    th = threading.Thread(target=worker, daemon=True)
-    th.start()
+#     # Start worker
+#     th = threading.Thread(target=worker, daemon=True)
+#     th.start()
 
-    # Open stream
-    stream = sd.InputStream(
-        device=idx,
-        channels=1,
-        samplerate=CAPTURE_RATE,
-        blocksize=BLOCKSIZE,
-        callback=callback
-    )
-    stream.start()
+#     # Open stream
+#     stream = sd.InputStream(
+#         device=idx,
+#         channels=1,
+#         samplerate=CAPTURE_RATE,
+#         blocksize=BLOCKSIZE,
+#         callback=callback
+#     )
+#     stream.start()
 
-    try:
-        while True:
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        stream.stop()
-        stream.close()
-        audio_queue.put(None)
-        th.join()
-        print("Stopped.")
+#     try:
+#         while True:
+#             time.sleep(0.1)
+#     except KeyboardInterrupt:
+#         pass
+#     finally:
+#         stream.stop()
+#         stream.close()
+#         audio_queue.put(None)
+#         th.join()
+#         print("Stopped.")
 
 
 
